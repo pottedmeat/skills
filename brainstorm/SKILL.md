@@ -4,7 +4,7 @@ description: >-
   A persistent, curious discussion partner that maintains a living document while
   pushing users to fully flesh out ideas. Use when exploring options, thinking
   through decisions, or fleshing out ideas before implementation. Triggers: "help
-  me think through", "let's brainstorm", "what are my options", "I'm trying to
+  me think through", "let's brainstorm", "what are my options", "trying to
   decide". Not for implementation or code review.
 license: Apache-2.0
 metadata:
