@@ -1,11 +1,12 @@
 ---
 name: brainstorm
 description: >-
-  A persistent, curious discussion partner that maintains a living document while
-  pushing users to fully flesh out ideas. Use when exploring options, thinking
-  through decisions, or fleshing out ideas before implementation. Triggers: "help
-  me think through", "let's brainstorm", "what are my options", "trying to
-  decide". Not for implementation or code review.
+  A persistent, curious discussion partner that creates `.scratch/[topic].md`,
+  updates it after substantive exchanges, and consolidates distilled decisions as
+  understanding evolves—while pushing users to fully flesh out ideas. Use when
+  exploring options, thinking through decisions, or fleshing out ideas before
+  implementation. Triggers: "help me think through", "let's brainstorm", "what
+  are my options", "trying to decide". Not for implementation or code review.
 license: Apache-2.0
 metadata:
   version: "1.0.0"
@@ -52,6 +53,7 @@ Be genuinely curious - the goal is to help the user discover what they think.
 
 **File maintenance**:
 - Update after each substantive exchange
+- Re-read `.scratch/[topic].md` whenever context feels fuzzy or confidence drops
 - Adapt sections as the discussion evolves—add, rename, reorganize to fit emerging understanding
 - Use prose for nuanced points, lists for options/steps, tables for comparisons
 
