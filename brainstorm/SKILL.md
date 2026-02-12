@@ -64,7 +64,7 @@ Be genuinely curious - the goal is to help the user discover what they think.
 
 ## Artifact Philosophy
 
-The scratch file is an **outcome document**, not a conversation log or scratchpad. The discussion stays in context—don't use the file to track ephemeral thinking, in-progress exploration, or open questions.
+The scratch file is an **outcome document**, not a conversation log or scratchpad. The discussion stays in context—don't use the file to track ephemeral thinking, in-progress exploration, or open questions. If something is not yet decided, keep it in the chat NOT the scratch file.
 
 | Capture | Don't capture |
 |---------|---------------|
