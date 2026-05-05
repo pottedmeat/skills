@@ -1,11 +1,19 @@
 ---
 name: deepwiki-to-skill
-description: Converts DeepWiki documentation from a GitHub repository into a reusable local Cursor or Agent Zero skill. Verifies DeepWiki tool access, captures raw wiki structure and contents, splits pages into stable reference files, rebuilds a linked hierarchy, and generates a concise SKILL.md with progressive disclosure. Use when the user wants to turn DeepWiki repo documentation into a local skill, asks to document a GitHub repo as a skill, or wants to reuse DeepWiki output as structured skill files. Do not use for repos without DeepWiki coverage or for generating skills directly from source code.
+description: Converts DeepWiki documentation from a GitHub repository into a reusable local skill (Cursor, Agent Zero, OpenCode, or any harness using SKILL.md + references/). Verifies DeepWiki tool access, captures raw wiki structure and contents, splits pages into stable reference files, rebuilds a linked hierarchy, and generates a concise SKILL.md with progressive disclosure. Use when the user asks to "convert DeepWiki to a skill", "make a skill from this repo's wiki", "turn DeepWiki into references", "document this GitHub repo as a skill", or wants reusable per-repo documentation derived from DeepWiki output. Do NOT use when the repo has no DeepWiki coverage, when generating skills from source code (use create-skill instead), or for ad hoc repo Q&A (call DeepWiki MCP directly).
 ---
 
 # DeepWiki to Skill
 
-Convert DeepWiki wiki structure and wiki content output into a local Cursor or Agent Zero skill with progressive disclosure: a concise `SKILL.md` plus `references/*.md` files loaded on demand.
+Convert DeepWiki wiki structure and wiki content output into a local skill (Cursor, Agent Zero, OpenCode, or any harness consuming a `SKILL.md` + `references/` layout) with progressive disclosure: a concise `SKILL.md` plus `references/*.md` files loaded on demand.
+
+## Non-negotiables
+
+- **Never produce partial output.** If any MCP call, script, or validation step fails, stop immediately and report the exact failure. A partial skill is worse than no skill — it looks correct but misleads every later session.
+- **Reuse the persisted slug map.** Structure links MUST come from `references/_slug-map.json`. Never recompute slugs independently in step 4.
+- **Treat `---` inside page bodies as content.** Strip only the synthetic page-boundary separator (a trailing `---` immediately before the next `#` heading).
+- **Do not reimplement the bundled scripts inline.** If `scripts/split-pages.js` or `scripts/build-structure.js` is missing or fails, stop and ask the user to restore it. Re-deriving slug rules across runs breaks determinism and silently corrupts structure links.
+- **Frontmatter portability.** The generated skill's frontmatter should contain only `name` and `description`. Harness-specific fields (`allowed-tools`, `version`, etc.) are not portable across Cursor / OpenCode / Agent Zero / Claude Code.
 
 ## When to use
 
@@ -34,15 +42,12 @@ Do not use this skill when:
 
 Before doing any conversion work:
 
-- Confirm that DeepWiki MCP is available
-- Discover the available DeepWiki tools and inspect their schemas before calling them
-- Verify there is one tool for reading wiki structure and another for reading full wiki contents
-- Tool names may vary by environment; use the available equivalents
-- Some environments expose tools such as `read_wiki_structure` and `read_wiki_contents`
-- If the needed tools are missing, install, authenticate, or configure DeepWiki MCP only if the environment allows it
-- If the environment does not allow that, stop and ask the user to enable DeepWiki MCP
-- Ask whether the output should go in `.cursor/skills/<skill-dir>/` or `~/.cursor/skills/<skill-dir>/`
-- Resolve the final skill directory name before creating files
+1. List available MCP tools whose names contain `wiki` or `deepwiki`.
+2. Identify the **structure tool**: accepts `repoName`, returns a hierarchical bullet list (typically `read_wiki_structure`).
+3. Identify the **contents tool**: accepts `repoName`, returns a single markdown blob with `# Page:` markers (typically `read_wiki_contents`).
+4. If either tool is missing, stop and ask the user to enable DeepWiki MCP. Do not proceed with only one of the two.
+5. Ask whether the output should be a project skill or a personal skill, using whatever skills directory convention the host harness uses (e.g. `.cursor/skills/<skill-dir>/` vs `~/.cursor/skills/<skill-dir>/`, or the equivalent for Agent Zero / OpenCode / Claude Code).
+6. Resolve the final skill directory name before creating files. If `<skill-dir>/SKILL.md` already exists at the chosen destination, warn before overwriting.
 
 ### 2. Fetch and store raw data
 
@@ -93,7 +98,13 @@ Required invariants:
 - Strip trailing empty lines
 - Remove a trailing `---` only when it is the synthetic DeepWiki page separator at the page boundary before the next page body begins with `#`
 
-Prefer `scripts/split-pages.js` if it exists in this skill directory. It should write the reference files plus `references/_slug-map.json`. If the script is unavailable or fails, implement equivalent logic inline.
+Run the bundled splitter from the chosen skill directory:
+
+```bash
+node <skill-dir>/scripts/split-pages.js raw/wiki-contents.md references
+```
+
+The script writes the reference files plus `references/_slug-map.json`. **If the script is missing or fails, stop and report the failure — do not reimplement it inline.** Re-deriving slug rules across runs breaks determinism and silently corrupts structure links.
 
 After splitting:
 
@@ -115,7 +126,13 @@ Required invariants:
 - Preserve the hierarchy expressed by the wiki structure output
 - Capture the resulting Markdown list for the final `SKILL.md`
 
-Prefer `scripts/build-structure.js` if it exists in this skill directory. If the script is unavailable or fails, implement equivalent logic inline.
+Run the bundled structure builder and capture its stdout:
+
+```bash
+node <skill-dir>/scripts/build-structure.js raw/wiki-structure.txt references
+```
+
+**If the script is missing or fails, stop and report the failure — do not reimplement it inline.** Recomputing slugs in this step (instead of consuming `_slug-map.json`) is the most common cause of broken structure links.
 
 Before continuing, verify that every generated link target exists on disk.
 
@@ -123,14 +140,17 @@ Before continuing, verify that every generated link target exists on disk.
 
 Choose 1 to 3 reference files that best represent what an LLM needs in order to understand the project.
 
-Use this deterministic selection order:
+Selection (deterministic):
 
-1. **Always include the first page**
-2. **Add one architecture or core-concepts page** if a title contains terms such as `architecture`, `overview`, `concepts`, `design`, or `internals`
-3. **Add one data, API, or domain page** if a title contains terms such as `api`, `schema`, `model`, `data`, or `reference`
-4. **Stop at 3 files maximum**
-5. **Verify each selected file exists** in `references/`
-6. If a selected file is missing, replace it with the next best matching candidate
+1. Always include the first page.
+2. Add the first page whose title matches `/architecture|overview|concepts|design|internals/i`.
+3. Add the first page whose title matches `/api|schema|model|data|reference/i`.
+4. Cap the selection at 3 files.
+
+Validation (after selection):
+
+- Confirm each selected path resolves to a real file in `references/`.
+- If a selected file is missing, replace it with the next match in the same category. If no candidate remains in that category, drop the slot rather than substituting from another category.
 
 Before proceeding, confirm that all selected reference paths resolve to real files.
 
@@ -192,9 +212,36 @@ These rules apply during page splitting:
 - `---` inside page content is valid markdown and must not be treated as a delimiter by default
 - Treat a trailing `---` as the synthetic DeepWiki page separator only when the current page ends with `---` and the immediately following content begins with a `#` heading for the next page body
 
+### Example
+
+Input (`raw/wiki-contents.md`):
+
+```
+# Page: Overview
+# Overview
+Intro paragraph.
+
+---
+
+# Page: Architecture
+# Architecture
+Layered system…
+```
+
+Output:
+
+- `references/overview.md` — body starts with `# Overview`. The trailing `---` is stripped because it preceded a `#` heading (synthetic page boundary).
+- `references/architecture.md` — body starts with `# Architecture`.
+- `references/_slug-map.json` — `{ "entries": [ { "title": "Overview", "filename": "overview.md", ... }, { "title": "Architecture", "filename": "architecture.md", ... } ] }`
+
 ## Script locations
 
-Helper scripts live in the same skill directory as this `SKILL.md`. Prefer them over inline logic and fall back to inline logic only if they are unavailable or fail:
+Helper scripts live in the same skill directory as this `SKILL.md`. They are required, not optional — if a script is missing, stop and ask the user to restore it (e.g. from a fresh checkout) rather than reimplementing inline:
 
 - `scripts/split-pages.js` — splits wiki contents into reference files and writes `references/_slug-map.json`
 - `scripts/build-structure.js` — reads `references/_slug-map.json` and produces the hierarchical markdown list
+- `scripts/reference.md` — load on demand for the page-delimiter, structure-list, and slug rules
+
+## When the workflow stops at a validation gate
+
+Append a one-line note to `docs/learnings.md` recording the failure mode and the repo. This builds a lightweight retrospective so future runs can anticipate edge cases (e.g. "vercel/ai — slug collision on three `Reference` pages", "supabase/supabase — `# Page:` markers missing from contents output").
